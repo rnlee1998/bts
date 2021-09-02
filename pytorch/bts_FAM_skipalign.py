@@ -1,24 +1,11 @@
-# Copyright (C) 2019 Jin Han Lee
-#
-# This file is a part of BTS.
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>
+#更改：bts加上了FAM（flow alignment module）,对齐了upconv,lpg,skip
 
+import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as torch_nn_func
 import math
-
+import torch.nn.functional as F
 from collections import namedtuple
 
 
@@ -192,6 +179,8 @@ class bts(nn.Module):
                                               nn.ELU())
         self.get_depth  = torch.nn.Sequential(nn.Conv2d(num_features // 16, 1, 3, 1, 1, bias=False),
                                               nn.Sigmoid())
+        #FAM flow alignment module
+        self.fam = AlignedModule(num_features,num_features)
 
     def forward(self, features, focal):
         skip0, skip1, skip2, skip3 = features[0], features[1], features[2], features[3]
@@ -225,11 +214,13 @@ class bts(nn.Module):
         plane_dist_8x8 = reduc8x8[:, 3, :, :]
         plane_eq_8x8 = torch.cat([plane_normal_8x8, plane_dist_8x8.unsqueeze(1)], 1)
         depth_8x8 = self.lpg8x8(plane_eq_8x8, focal)
-        depth_8x8_scaled = depth_8x8.unsqueeze(1) / self.params.max_depth
-        depth_8x8_scaled_ds = torch_nn_func.interpolate(depth_8x8_scaled, scale_factor=0.25, mode='nearest')#下采样ds/4
-        
+        depth_8x8_scaled = depth_8x8.unsqueeze(1) / self.params.max_depth#H
+
         upconv3 = self.upconv3(daspp_feat) # H/4
         upconv3 = self.bn3(upconv3)
+        fam1 = self.fam([depth_8x8_scaled,upconv3])#大图, 小图->H
+        fam1 = self.fam([fam1,skip1])#对齐skip
+        depth_8x8_scaled_ds = torch_nn_func.interpolate(fam1, scale_factor=0.25, mode='nearest')#下采样ds/4->H/4
         concat3 = torch.cat([upconv3, skip1, depth_8x8_scaled_ds], dim=1)
         iconv3 = self.conv3(concat3)
         
@@ -240,10 +231,12 @@ class bts(nn.Module):
         plane_eq_4x4 = torch.cat([plane_normal_4x4, plane_dist_4x4.unsqueeze(1)], 1)
         depth_4x4 = self.lpg4x4(plane_eq_4x4, focal)
         depth_4x4_scaled = depth_4x4.unsqueeze(1) / self.params.max_depth
-        depth_4x4_scaled_ds = torch_nn_func.interpolate(depth_4x4_scaled, scale_factor=0.5, mode='nearest')#下采样ds/2
-        
+              
         upconv2 = self.upconv2(iconv3) # H/2
         upconv2 = self.bn2(upconv2)
+        fam2 = self.fam([depth_4x4_scaled,upconv2])#对齐后输出为H
+        fam2 = self.fam([fam2,skip2])# 对齐skip
+        depth_4x4_scaled_ds = torch_nn_func.interpolate(fam2, scale_factor=0.5, mode='nearest')#下采样ds/2->H/2
         concat2 = torch.cat([upconv2, skip0, depth_4x4_scaled_ds], dim=1)
         iconv2 = self.conv2(concat2)
         
@@ -330,3 +323,41 @@ class BtsModel(nn.Module):
         skip_feat = self.encoder(x)
         return self.decoder(skip_feat, focal)
     
+## Add_module: FAM (Flow Alignment Module) 
+class AlignedModule(nn.Module):
+
+    def __init__(self, inplane, outplane, kernel_size=3):
+        super(AlignedModule, self).__init__()
+        self.down_h = nn.Conv2d(inplane, outplane, 1, bias=False)
+        self.down_l = nn.Conv2d(inplane, outplane, 1, bias=False)
+        self.flow_make = nn.Conv2d(outplane*2, 2, kernel_size=kernel_size, padding=1, bias=False)
+
+    def forward(self, x):
+        low_feature, h_feature = x
+        h_feature_orign = h_feature
+        h, w = low_feature.size()[2:]
+        size = (h, w)
+        low_feature = self.down_l(low_feature)
+        h_feature= self.down_h(h_feature)
+        h_feature = F.upsample(h_feature, size=size, mode="bilinear", align_corners=True)
+        flow = self.flow_make(torch.cat([h_feature, low_feature], 1))
+        h_feature = self.flow_warp(h_feature_orign, flow, size=size)
+
+        return h_feature
+
+    def flow_warp(self, input, flow, size):
+        out_h, out_w = size
+        n, c, h, w = input.size()
+        # n, c, h, w
+        # n, 2, h, w
+
+        norm = torch.tensor([[[[out_w, out_h]]]]).type_as(input).to(input.device)
+        h = torch.linspace(-1.0, 1.0, out_h).view(-1, 1).repeat(1, out_w)
+        w = torch.linspace(-1.0, 1.0, out_w).repeat(out_h, 1)
+        grid = torch.cat((w.unsqueeze(2), h.unsqueeze(2)), 2)
+        grid = grid.repeat(n, 1, 1, 1).type_as(input).to(input.device)
+        grid = grid + flow.permute(0, 2, 3, 1) / norm
+
+        output = F.grid_sample(input, grid)
+        return output
+

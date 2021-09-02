@@ -19,6 +19,7 @@ import argparse
 import datetime
 import sys
 import os
+from numpy.core.fromnumeric import var
 
 import torch
 import torch.nn as nn
@@ -77,8 +78,8 @@ parser.add_argument('--weight_decay',              type=float, help='weight deca
 parser.add_argument('--bts_size',                  type=int,   help='initial num_filters in bts', default=512)
 parser.add_argument('--retrain',                               help='if used with checkpoint_path, will restart training from step zero', action='store_true')
 parser.add_argument('--adam_eps',                  type=float, help='epsilon in Adam optimizer', default=1e-6)
-parser.add_argument('--batch_size',                type=int,   help='batch size', default=4)
-parser.add_argument('--num_epochs',                type=int,   help='number of epochs', default=50)
+parser.add_argument('--batch_size',                type=int,   help='batch size', default=1)
+parser.add_argument('--num_epochs',                type=int,   help='number of epochs', default=5)#50
 parser.add_argument('--learning_rate',             type=float, help='initial learning rate', default=1e-4)
 parser.add_argument('--end_learning_rate',         type=float, help='end learning rate', default=-1)
 parser.add_argument('--variance_focus',            type=float, help='lambda in paper: [0, 1], higher value more focus on minimizing variance of error', default=0.85)
@@ -95,7 +96,7 @@ parser.add_argument('--world_size',                type=int,   help='number of n
 parser.add_argument('--rank',                      type=int,   help='node rank for distributed training', default=0)
 parser.add_argument('--dist_url',                  type=str,   help='url used to set up distributed training', default='tcp://127.0.0.1:1234')
 parser.add_argument('--dist_backend',              type=str,   help='distributed backend', default='nccl')
-parser.add_argument('--gpu',                       type=int,   help='GPU id to use.', default=None)
+parser.add_argument('--gpu',                       type=int,   help='GPU id to use.', default=0)#None
 parser.add_argument('--multiprocessing_distributed',           help='Use multi-processing distributed training to launch '
                                                                     'N processes per node, which has N GPUs. This is the '
                                                                     'fastest way to use PyTorch for either single node or '
@@ -424,7 +425,11 @@ def main_worker(gpu, ngpus_per_node, args):
 
     var_sum = [var.sum() for var in model.parameters() if var.requires_grad]
     var_cnt = len(var_sum)
-    var_sum = np.sum(var_sum)
+    print("debug******************************                ")
+    # debug  手动将var_sum加到cpu中转成numpy
+    var_sum = torch.tensor(var_sum, device=torch.device("cpu"))
+    var_sum = torch.sum(var_sum)
+    # var_sum = np.sum(var_sum)
 
     print("Initial variables' sum: {:.3f}, avg: {:.3f}".format(var_sum, var_sum/var_cnt))
 
