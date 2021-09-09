@@ -64,7 +64,7 @@ class BtsDataLoader(object):
                 self.eval_sampler = None
             self.data = DataLoader(self.testing_samples, 1,
                                    shuffle=False,
-                                   num_workers=1,
+                                   num_workers=4,
                                    pin_memory=True,
                                    sampler=self.eval_sampler)
         
