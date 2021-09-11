@@ -215,12 +215,15 @@ class bts(nn.Module):
         plane_eq_8x8 = torch.cat([plane_normal_8x8, plane_dist_8x8.unsqueeze(1)], 1)
         depth_8x8 = self.lpg8x8(plane_eq_8x8, focal)
         depth_8x8_scaled = depth_8x8.unsqueeze(1) / self.params.max_depth#H
+        depth_8x8_scaled_ds = torch_nn_func.interpolate(depth_8x8_scaled, scale_factor=0.25, mode='nearest')#下采样ds/4
 
         upconv3 = self.upconv3(daspp_feat) # H/4
         upconv3 = self.bn3(upconv3)
-        fam1 = self.fam([depth_8x8_scaled,upconv3])#大图, 小图->H
-        depth_8x8_scaled_ds = torch_nn_func.interpolate(fam1, scale_factor=0.25, mode='nearest')#下采样ds/4->H/4
-        concat3 = torch.cat([upconv3, skip1, depth_8x8_scaled_ds], dim=1)
+        #fam
+        skip = self.fam([upconv3,skip1])
+        depth_8x8_scaled_ds = self.fam([upconv3,depth_8x8_scaled_ds])
+        #fam end
+        concat3 = torch.cat([upconv3, skip, depth_8x8_scaled_ds], dim=1)
         iconv3 = self.conv3(concat3)
         
         reduc4x4 = self.reduc4x4(iconv3)
@@ -230,11 +233,14 @@ class bts(nn.Module):
         plane_eq_4x4 = torch.cat([plane_normal_4x4, plane_dist_4x4.unsqueeze(1)], 1)
         depth_4x4 = self.lpg4x4(plane_eq_4x4, focal)
         depth_4x4_scaled = depth_4x4.unsqueeze(1) / self.params.max_depth
-              
+        depth_4x4_scaled_ds = torch_nn_func.interpolate(depth_4x4_scaled, scale_factor=0.5, mode='nearest')#下采样ds/2
+
         upconv2 = self.upconv2(iconv3) # H/2
         upconv2 = self.bn2(upconv2)
-        fam2 = self.fam([depth_4x4_scaled,upconv2])#对齐后输出为H
-        depth_4x4_scaled_ds = torch_nn_func.interpolate(fam2, scale_factor=0.5, mode='nearest')#下采样ds/2->H/2
+        #fam
+        skip0 = self.fam([upconv2,skip0])
+        depth_4x4_scaled_ds = self.fam([upconv2,depth_4x4_scaled_ds])
+        #fam end
         concat2 = torch.cat([upconv2, skip0, depth_4x4_scaled_ds], dim=1)
         iconv2 = self.conv2(concat2)
         
@@ -248,6 +254,12 @@ class bts(nn.Module):
         
         upconv1 = self.upconv1(iconv2)
         reduc1x1 = self.reduc1x1(upconv1)
+        #fam
+        reduc1x1 = self.fam([upconv1,reduc1x1])
+        depth_2x2_scaled = self.fam([upconv1,depth_2x2_scaled])
+        depth_4x4_scaled = self.fam([upconv1,depth_4x4_scaled])
+        depth_8x8_scaled = self.fam([upconv1,depth_8x8_scaled_ds])
+        #fam end
         concat1 = torch.cat([upconv1, reduc1x1, depth_2x2_scaled, depth_4x4_scaled, depth_8x8_scaled], dim=1)
         iconv1 = self.conv1(concat1)
         final_depth = self.params.max_depth * self.get_depth(iconv1)

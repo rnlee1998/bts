@@ -214,13 +214,13 @@ class bts(nn.Module):
         plane_dist_8x8 = reduc8x8[:, 3, :, :]
         plane_eq_8x8 = torch.cat([plane_normal_8x8, plane_dist_8x8.unsqueeze(1)], 1)
         depth_8x8 = self.lpg8x8(plane_eq_8x8, focal)
-        depth_8x8_scaled = depth_8x8.unsqueeze(1) / self.params.max_depth#H
+        depth_8x8_scaled = depth_8x8.unsqueeze(1) / self.params.max_depth# H
 
         upconv3 = self.upconv3(daspp_feat) # H/4
         upconv3 = self.bn3(upconv3)
         fam1 = self.fam([depth_8x8_scaled,upconv3])#大图, 小图->H
-        fam1 = self.fam([fam1,skip1])#对齐skip
         depth_8x8_scaled_ds = torch_nn_func.interpolate(fam1, scale_factor=0.25, mode='nearest')#下采样ds/4->H/4
+        depth_8x8_scaled_ds = self.fam([depth_8x8_scaled_ds,skip1])#对齐skip
         concat3 = torch.cat([upconv3, skip1, depth_8x8_scaled_ds], dim=1)
         iconv3 = self.conv3(concat3)
         
@@ -235,8 +235,8 @@ class bts(nn.Module):
         upconv2 = self.upconv2(iconv3) # H/2
         upconv2 = self.bn2(upconv2)
         fam2 = self.fam([depth_4x4_scaled,upconv2])#对齐后输出为H
-        fam2 = self.fam([fam2,skip2])# 对齐skip
         depth_4x4_scaled_ds = torch_nn_func.interpolate(fam2, scale_factor=0.5, mode='nearest')#下采样ds/2->H/2
+        depth_4x4_scaled_ds = self.fam([depth_4x4_scaled_ds,skip2])# 对齐skip
         concat2 = torch.cat([upconv2, skip0, depth_4x4_scaled_ds], dim=1)
         iconv2 = self.conv2(concat2)
         
@@ -250,6 +250,12 @@ class bts(nn.Module):
         
         upconv1 = self.upconv1(iconv2)
         reduc1x1 = self.reduc1x1(upconv1)
+        # fam 特征图拼接前合并
+        reduc1x1 = self.fam([upconv1,reduc1x1])
+        depth_2x2_scaled = self.fam([upconv1,depth_2x2_scaled])
+        depth_4x4_scaled = self.fam([upconv1,depth_4x4_scaled])
+        depth_8x8_scaled = self.fam([upconv1,depth_8x8_scaled])
+        # fam end
         concat1 = torch.cat([upconv1, reduc1x1, depth_2x2_scaled, depth_4x4_scaled, depth_8x8_scaled], dim=1)
         iconv1 = self.conv1(concat1)
         final_depth = self.params.max_depth * self.get_depth(iconv1)
