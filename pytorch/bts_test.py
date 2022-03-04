@@ -31,9 +31,9 @@ from bts_dataloader import *
 import errno
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from bts import *
+from bts_fusion_models_kitti import *
 from bts_dataloader import *
-
+from thop import profile
 
 def convert_arg_line_to_args(arg_line):
     for arg in arg_line.split():
@@ -58,7 +58,7 @@ parser.add_argument('--dataset', type=str, help='dataset to train on, make3d or 
 parser.add_argument('--do_kb_crop', help='if set, crop input images as kitti benchmark images', action='store_true')
 parser.add_argument('--save_lpg', help='if set, save outputs from lpg layers', action='store_true')
 parser.add_argument('--bts_size', type=int,   help='initial num_filters in bts', default=512)
-
+parser.add_argument('--gpu', type=str,   help=' ', default='0')
 if sys.argv.__len__() == 2:
     arg_filename_with_prefix = '@' + sys.argv[1]
     args = parser.parse_args([arg_filename_with_prefix])
@@ -68,10 +68,11 @@ else:
 model_dir = os.path.dirname(args.checkpoint_path)
 sys.path.append(model_dir)
 
-for key, val in vars(__import__(args.model_name)).items():
-    if key.startswith('__') and key.endswith('__'):
-        continue
-    vars()[key] = val
+#for key, val in vars(__import__(args.model_name)).items():
+#    if key.startswith('__') and key.endswith('__'):
+ #       continue
+  #  vars()[key] = val
+
 
 
 def get_num_lines(file_path):
@@ -86,14 +87,21 @@ def test(params):
     args.mode = 'test'
     dataloader = BtsDataLoader(args, 'test')
     
-    model = BtsModel(params=args)
+    model = BtsModel_Fusion(params=args)    
     model = torch.nn.DataParallel(model)
     
     checkpoint = torch.load(args.checkpoint_path)
     model.load_state_dict(checkpoint['model'])
     model.eval()
     model.cuda()
-
+    
+    #
+    #device = torch.device("cuda:0")
+    #model.to(device)
+    #flops,params = profile(model1,(dummy_input))
+    #print('flops: %.2f M, params: %.2f M'%(flops/1000000.0,params/1000000.0))
+    #
+    
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
     print("Total number of parameters: {}".format(num_params))
 
@@ -111,19 +119,34 @@ def test(params):
     pred_1x1s = []
 
     start_time = time.time()
+    time_list = []
     with torch.no_grad():
         for _, sample in enumerate(tqdm(dataloader.data)):
             image = Variable(sample['image'].cuda())
+            
             focal = Variable(sample['focal'].cuda())
             # Predict
-            lpg8x8, lpg4x4, lpg2x2, reduc1x1, depth_est = model(image, focal)
+            #lpg8x8, lpg4x4, lpg2x2, reduc1x1, depth_est = model(image, focal)
+            s_time = time.time()
+            depth_est = model(image)
+            time_list.append(time.time()-s_time)
+            
+            #flops,params = profile(model.module.cuda(),(image,))
+            #print('flops: %.2f M, params: %.2f M'%(flops/1000000.0,params/1000000.0))
+            
             pred_depths.append(depth_est.cpu().numpy().squeeze())
-            pred_8x8s.append(lpg8x8[0].cpu().numpy().squeeze())
-            pred_4x4s.append(lpg4x4[0].cpu().numpy().squeeze())
-            pred_2x2s.append(lpg2x2[0].cpu().numpy().squeeze())
-            pred_1x1s.append(reduc1x1[0].cpu().numpy().squeeze())
-
+            #pred_8x8s.append(lpg8x8[0].cpu().numpy().squeeze())
+            #pred_4x4s.append(lpg4x4[0].cpu().numpy().squeeze())
+            #pred_2x2s.append(lpg2x2[0].cpu().numpy().squeeze())
+            #pred_1x1s.append(reduc1x1[0].cpu().numpy().squeeze())
+            
+    print("inference time:",np.array(time_list).mean())        
     elapsed_time = time.time() - start_time
+    
+    #
+
+    
+    #
     print('Elapesed time: %s' % str(elapsed_time))
     print('Done.')
     
@@ -171,10 +194,10 @@ def test(params):
             gt[gt == 0] = np.amax(gt)
         
         pred_depth = pred_depths[s]
-        pred_8x8 = pred_8x8s[s]
-        pred_4x4 = pred_4x4s[s]
-        pred_2x2 = pred_2x2s[s]
-        pred_1x1 = pred_1x1s[s]
+        #pred_8x8 = pred_8x8s[s]
+        #pred_4x4 = pred_4x4s[s]
+        #pred_2x2 = pred_2x2s[s]
+        #pred_1x1 = pred_1x1s[s]
         
         if args.dataset == 'kitti' or args.dataset == 'kitti_benchmark':
             pred_depth_scaled = pred_depth * 256.0

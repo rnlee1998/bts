@@ -93,8 +93,8 @@ class DataLoadPreprocess(Dataset):
     
     def __getitem__(self, idx):
         sample_path = self.filenames[idx]
-        focal = float(sample_path.split()[2])
-
+        #focal = float(sample_path.split()[2])
+        focal=0
         if self.mode == 'train':
             if self.args.dataset == 'kitti' and self.args.use_right is True and random.random() > 0.5:
                 image_path = os.path.join(self.args.data_path, "./" + sample_path.split()[3])
