@@ -95,8 +95,9 @@ $ python bts_test.py arguments_test_eigen.txt
 This will save results to ./result_bts_eigen_v2_pytorch_densenet161.
 Finally, we can evaluate the prediction results with
 ```
-$ cd ~/workspace/bts/pytorch
-$ python ../utils/eval_with_pngs.py --pred_path result_bts_eigen_v2_pytorch_densenet161/raw/ --gt_path ../../dataset/kitti_dataset/data_depth_annotated/ --dataset kitti --min_depth_eval 1e-3 --max_depth_eval 80 --do_kb_crop --garg_crop
+cd ~/workspace/bts/pytorch
+python ../utils/eval_with_pngs.py --pred_path result_test/raw/ --gt_path ../../../dataset/kitti_dataset/trainval/ --dataset kitti --min_depth_eval 1e-3 --max_depth_eval 80 --do_kb_crop --garg_crop
+
 ```
 You should see outputs like this:
 ```
