@@ -3,7 +3,7 @@
 --dataset kitti
 --filenames_file ../train_test_inputs/eigen_test_files_with_gt.txt
 --model_name test
---checkpoint_path /mnt/data/liran/TransDepth-main/models_fusion_kitti_resnext+resnext/kitti_fusion_rank_3/model-12000-best_rms_2.36333
+--checkpoint_path /mnt/data/liran/TransDepth-main/final_model/kitti-5000-best_rms_2.28907
 --input_height 352
 --input_width 1216
 --max_depth 80

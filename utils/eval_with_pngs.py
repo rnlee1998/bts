@@ -213,7 +213,13 @@ def eval(pred_depths):
     print("{:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}".format(
         d1.mean(), d2.mean(), d3.mean(),
         abs_rel.mean(), sq_rel.mean(), rms.mean(), log_rms.mean(), silog.mean(), log10.mean()))
-
+    print("Std:")   
+    print("{:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}, {:>7}".format(
+        'd1', 'd2', 'd3', 'AbsRel', 'SqRel', 'RMSE', 'RMSElog', 'SILog', 'log10'))    
+    print("{:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}, {:7.3f}".format(
+        d1.std(), d2.std(), d3.std(),
+        abs_rel.std(), sq_rel.std(), rms.std(), log_rms.std(), silog.std(), log10.std()))   
+    #np.savez('/mnt/data/liran/workdir/bts/pytorch/npz_data/nyu_transdepth.npz',silog=silog, log10=log10, abs_rel=abs_rel, sq_rel=sq_rel, rms=rms, log_rms=log_rms, d1=d1, d2=d2, d3=d3)
     return silog, log10, abs_rel, sq_rel, rms, log_rms, d1, d2, d3
 
 

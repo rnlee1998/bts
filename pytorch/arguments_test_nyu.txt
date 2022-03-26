@@ -1,9 +1,9 @@
 --encoder densenet161_bts
---data_path ../../dataset/nyu_depth_v2/official_splits/test/
+--data_path ../../../dataset/nyu_depth_v2/official_splits/test/
 --dataset nyu
 --filenames_file ../train_test_inputs/nyudepthv2_test_files_with_gt.txt
---model_name bts_nyu_v2_pytorch_densenet161
---checkpoint_path ./models/bts_nyu_v2_pytorch_densenet161/model
+--model_name nyu_top4
+--checkpoint_path /mnt/data2/datasets/liran/models_fusion_nyu_1006_top4/nyu_fusion_rank_3/model-9500-best_rms_0.35461
 --input_height 480
 --input_width 640
 --max_depth 10

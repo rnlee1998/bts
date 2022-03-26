@@ -136,7 +136,7 @@ class BtsModel_Fusion(nn.Module):
 
         self.resnet = BtsModel_Res(self.params)
         self.resnet = torch.nn.DataParallel(self.resnet)
-        checkpoint = torch.load("/mnt/data2/datasets/liran/models_stage1_resnet101+/kitti_stage1_resnet101/model-80500-best_rms_2.41952",
+        checkpoint = torch.load("/mnt/data/liran/TransDepth-main/pytorch/stage1_kitti/resnet101-80500-best_rms_2.41952",
                                 map_location='cuda:{}'.format(self.params.gpu))
         self.resnet.load_state_dict(checkpoint['model'])
         for parameter in self.resnet.parameters():
@@ -152,7 +152,7 @@ class BtsModel_Fusion(nn.Module):
 
         self.resnext = BtsModel_Resnext(self.params)
         self.resnext = torch.nn.DataParallel(self.resnext)
-        checkpoint = torch.load("/mnt/data2/datasets/liran/models_stage1_resnext/kitti_stage1_resnext/model-84500-best_rms_2.33582",
+        checkpoint = torch.load("/mnt/data/liran/TransDepth-main/pytorch/stage1_kitti/resnext-84500-best_rms_2.33582",
                                 map_location='cuda:{}'.format(self.params.gpu))
         self.resnext.load_state_dict(checkpoint['model'])
         for parameter in self.resnext.parameters():
@@ -163,13 +163,12 @@ class BtsModel_Fusion(nn.Module):
         checkpoint = torch.load("/mnt/data/liran/TransDepth-main/pytorch/stage1_kitti/vit-148500-best_rms_2.40909",
                                 map_location='cuda:{}'.format(self.params.gpu))
         self.transformer.load_state_dict(checkpoint['model'])
-        for parameter in self.resnext.parameters():
+        for parameter in self.transformer.parameters():
             parameter.requires_grad = False
-
 
         self.conformer = BtsModel_FCT(self.params)
         self.conformer = torch.nn.DataParallel(self.conformer)
-        checkpoint = torch.load("/mnt/data2/datasets/liran/models_stage1_CT+/kitti_stage1_CT_rank_1/model-83500-best_rms_2.36634",
+        checkpoint = torch.load("/mnt/data/liran/TransDepth-main/pytorch/stage1_kitti/CT-83500-best_rms_2.36634",
                                 map_location='cuda:{}'.format(self.params.gpu))
         self.conformer.load_state_dict(checkpoint['model'])
         for parameter in self.conformer.parameters():
@@ -177,7 +176,7 @@ class BtsModel_Fusion(nn.Module):
 
         self.volo = BtsModel_FVolo(self.params)
         self.volo = torch.nn.DataParallel(self.volo)
-        checkpoint = torch.load("/mnt/data2/datasets/liran/models_stage1_volo+/kitti_stage1_volo_rank_1/model-291000-best_rms_2.37780",
+        checkpoint = torch.load("/mnt/data/liran/TransDepth-main/pytorch/stage1_kitti/volo-291000-best_rms_2.37780",
                                 map_location='cuda:{}'.format(self.params.gpu))
         self.volo.load_state_dict(checkpoint['model'])
         for parameter in self.volo.parameters():
@@ -192,7 +191,7 @@ class BtsModel_Fusion(nn.Module):
         self.gru2 = GRU(gru1_output_size, gru2_output_size, 3)
         self.gru3 = GRU(gru2_output_size, gru3_output_size, 3)
 
-        self.get_depth = torch.nn.Sequential(nn.Conv2d(12, 1, 3, 1, 1, bias=False),
+        self.get_depth = torch.nn.Sequential(nn.Conv2d(8, 1, 3, 1, 1, bias=False),
                                              nn.Sigmoid())
         self.conv1 = torch.nn.Sequential(nn.Conv2d(32, out_channels=16, kernel_size=1, stride=1, padding=0),
                                          nn.ELU(inplace=True))
@@ -212,7 +211,7 @@ class BtsModel_Fusion(nn.Module):
             feature_conformer = self.conformer(x)
             feature_volo = self.volo(x)
 
-        features_to_fusion = [feature_volo,feature_conformer,feature_resnext]#精度由低到高
+        features_to_fusion = [feature_volo,feature_conformer]#精度由低到高
 
         features_fused = []
         fused_1 = self.conv1(feature_resnet)
@@ -227,22 +226,5 @@ class BtsModel_Fusion(nn.Module):
 
         features_fused = torch.cat(features_fused, 1)
         final_depth = self.params.max_depth * self.get_depth(features_fused)
-        return final_depth
-        #return PCA_Batch_Feat(feature_transformer,1)
-    
-        
-def PCA_Batch_Feat(X, k, center=True):
-    """
-    param X: BxCxHxW
-    param k: scalar
-    return:
-    """
-    B, C, H, W = X.shape
-    X = X.permute(0, 2, 3, 1)  # BxHxWxC
-    X = X.reshape(B, H * W, C)
-    U, S, V = torch.pca_lowrank(X, center=center)
-    Y = torch.bmm(X, V[:, :, :k])
-    Y = Y.reshape(B, H, W, k)
-    Y = Y.permute(0, 3, 1, 2)  # BxHxWxk
-    return Y
 
+        return final_depth

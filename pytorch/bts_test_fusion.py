@@ -31,7 +31,7 @@ from bts_dataloader import *
 import errno
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from bts_fusion_models_kitti import *
+from bts_fusion_4models_tf_cnn import *
 from bts_dataloader import *
 from thop import profile
 

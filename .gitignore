@@ -3,6 +3,8 @@
 
 /model
 *.png
+*.npz
+/pytorch/npz_data/
 # Notebook checkpoints
 .ipynb_checkpoints
 
